@@ -1,0 +1,94 @@
+#ifndef PROCESS__H
+#define PROCESS__H
+
+#include <vector>
+
+using lld = long long int;
+
+struct GalInfo {
+  float vX;
+  float vY;
+  float mass;
+};
+
+struct SpaceInfo {
+  float x;
+  float y;
+  float cellWidth;
+  float cellHeight;
+};
+
+struct Star {
+  long long int id;
+  float x;
+  float y;
+
+  inline bool operator<(const Star &other) const {
+    if (id < 0 && other.id < 0) {
+      return id > other.id;
+    }
+    return id < other.id;
+  }
+};
+
+class Process {
+ public:
+  int rank;
+  int numProcesses;
+
+  bool verbose;
+  int hor;
+  int ver;
+
+  GalInfo gal1;
+  GalInfo gal2;
+  SpaceInfo space;
+
+  std::vector<lld> ids;
+  std::vector<float> coords;
+  std::vector<float> speeds;
+  std::vector<float> masses;
+
+  void readGal(const std::string &filename, int galNum,
+               std::vector<Star> *stars);
+  void calcSpace(const std::vector<Star> &stars);
+
+  void exchangeSpaceInfo();
+  void exchangeGalaxiesInfo();
+
+  void distributeInitialStars(const std::vector<Star> &stars);
+  void recvInitialStars();
+
+  void step(float delta);
+
+  void printStars(std::string gal1, std::string gal2) const;
+
+ private:
+  void sendSpaceInfo() const;
+  void recvSpaceInfo();
+
+  void sendGalaxiesInfo() const;
+  void recvGalaxiesInfo();
+
+  std::vector<Star> receiveAllStarsForPrint() const;
+  void sendAllStarsForPrint() const;
+
+  void setInitialSpeed();
+  void updateMasses();
+
+  inline int starCell(float x, float y) const {
+    int cellX = (x - space.x) / space.cellWidth;
+    int cellY = (y - space.y) / space.cellHeight;
+    return cellY * ver + cellX;
+  }
+
+  void getAllStars(std::vector<float> *coords, std::vector<float> *masses,
+                   std::vector<lld> *count);
+  std::vector<float> calcAccValues(const std::vector<float> &otherCoords,
+                                 const std::vector<float> &otherMasses) const;
+  void updateCoords(const std::vector<float> &a, float delta);
+  void updateSpeeds(const std::vector<float> &a1, const std::vector<float> &a2,
+                    float delta);
+};
+
+#endif
