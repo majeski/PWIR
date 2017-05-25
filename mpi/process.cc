@@ -232,7 +232,7 @@ void Process::step(float delta) {
     oldAccs = accs;
   }
 
-  getAllStars(&otherCoords, &otherMasses, &count);
+  getOtherStars(&otherCoords, &otherMasses, &count);
   updateAccs(otherCoords, otherMasses);
 
   if (!firstStep) {
@@ -284,6 +284,33 @@ void Process::updateCoords(float delta) {
   for (lld i = 0; i < coords.size(); i++) {
     coords[i] += speeds[i] * delta + 0.5 * accs[i] * delta * delta;
   }
+
+  for (lld i = 0; i < coords.size(); i += 2) {
+    float &x = coords[i];
+    const float spaceWidth = space.cellWidth * ver;
+
+    if (x < space.x) {
+      float distX = space.x - x;
+      distX -= floor(distX / spaceWidth) * spaceWidth;
+      x = space.x + spaceWidth - distX;
+    } else if (x > space.x + spaceWidth) {
+      float distX = x - (space.x + spaceWidth);
+      distX -= floor(distX / spaceWidth) * spaceWidth;
+      x = space.x + distX;
+    }
+
+    float &y = coords[i + 1];
+    const float spaceHeight = space.cellHeight * hor;
+    if (y < space.y) {
+      float distY = space.y - y;
+      distY -= floor(distY / spaceHeight) * spaceHeight;
+      y = space.y + spaceHeight - distY;
+    } else if (x > space.x + spaceWidth) {
+      float distY = y - (space.y + spaceHeight);
+      distY -= floor(distY / spaceHeight) * spaceHeight;
+      y = space.y + distY;
+    }
+  }
 }
 
 void Process::updateSpeeds(const std::vector<float> &oldAccs, float delta) {
@@ -292,9 +319,9 @@ void Process::updateSpeeds(const std::vector<float> &oldAccs, float delta) {
   }
 }
 
-void Process::getAllStars(std::vector<float> *otherCoords,
-                          std::vector<float> *otherMasses,
-                          std::vector<lld> *count) {
+void Process::getOtherStars(std::vector<float> *otherCoords,
+                            std::vector<float> *otherMasses,
+                            std::vector<lld> *count) {
   int err;
   count->resize(numProcesses);
 
