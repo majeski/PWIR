@@ -11,3 +11,6 @@ main: $(OBJECTS)
 %.o: %.cc Makefile
 	$(CXX) $(CXXFLAGS) $<
 
+clean:
+	rm -rf $(OBJECTS) main
+

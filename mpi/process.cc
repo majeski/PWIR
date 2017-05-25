@@ -9,6 +9,8 @@
 
 #define MPI_LLD MPI_LONG_LONG_INT
 
+Process::Process() : firstStep(true) {}
+
 void Process::readGal(const std::string &filename, int galNum,
                       std::vector<Star> *stars) {
   FILE *f = fopen(filename.c_str(), "r");
@@ -223,29 +225,34 @@ inline std::pair<float, float> calcF(float star1X, float star1Y, float mass1,
 void Process::step(float delta) {
   std::vector<float> otherCoords;
   std::vector<float> otherMasses;
+  std::vector<float> oldAccs;
   std::vector<lld> count;
 
-  getAllStars(&otherCoords, &otherMasses, &count);
-  std::vector<float> f1 = calcAccValues(otherCoords, otherMasses);
-  updateCoords(f1, delta);
+  if (!firstStep) {
+    oldAccs = accs;
+  }
 
   getAllStars(&otherCoords, &otherMasses, &count);
-  std::vector<float> f2 = calcAccValues(otherCoords, otherMasses);
-  updateSpeeds(f1, f2, delta);
+  updateAccs(otherCoords, otherMasses);
+
+  if (!firstStep) {
+    updateSpeeds(oldAccs, delta);
+  }
+
+  updateCoords(delta);
+  firstStep = false;
 }
 
-std::vector<float> Process::calcAccValues(
-    const std::vector<float> &otherCoords,
-    const std::vector<float> &otherMasses) const {
+void Process::updateAccs(const std::vector<float> &otherCoords,
+                         const std::vector<float> &otherMasses) {
   lld otherCount = otherCoords.size() / 2;
-  std::vector<float> acc;
-  acc.resize(coords.size());
+  accs.resize(coords.size());
 
   for (lld i = 0; i < ids.size(); i++) {
     lld xIdx = i * 2;
     lld yIdx = i * 2 + 1;
-    acc[xIdx] = 0;
-    acc[yIdx] = 0;
+    accs[xIdx] = 0;
+    accs[yIdx] = 0;
 
     auto nextStar = [&](float otherX, float otherY, float otherMass) {
       float x = coords[xIdx];
@@ -253,8 +260,8 @@ std::vector<float> Process::calcAccValues(
       float mass = masses[i];
       float dX, dY;
       std::tie(dX, dY) = calcF(x, y, mass, otherX, otherY, otherMass);
-      acc[xIdx] += dX;
-      acc[yIdx] += dY;
+      accs[xIdx] += dX;
+      accs[yIdx] += dY;
     };
 
     for (lld j = 0; j < ids.size(); j++) {
@@ -268,23 +275,20 @@ std::vector<float> Process::calcAccValues(
       nextStar(otherCoords[j * 2], otherCoords[j * 2 + 1], otherMasses[j]);
     }
 
-    acc[xIdx] /= -masses[i];
-    acc[yIdx] /= -masses[i];
+    accs[xIdx] /= -masses[i];
+    accs[yIdx] /= -masses[i];
   }
-
-  return acc;
 }
 
-void Process::updateCoords(const std::vector<float> &a, float delta) {
+void Process::updateCoords(float delta) {
   for (lld i = 0; i < coords.size(); i++) {
-    coords[i] += speeds[i] * delta + 0.5 * a[i] * delta * delta;
+    coords[i] += speeds[i] * delta + 0.5 * accs[i] * delta * delta;
   }
 }
 
-void Process::updateSpeeds(const std::vector<float> &a1,
-                           const std::vector<float> &a2, float delta) {
+void Process::updateSpeeds(const std::vector<float> &oldAccs, float delta) {
   for (lld i = 0; i < speeds.size(); i++) {
-    speeds[i] += 0.5 * (a1[i] + a2[i]) * delta;
+    speeds[i] += 0.5 * (oldAccs[i] + accs[i]) * delta;
   }
 }
 
@@ -292,21 +296,15 @@ void Process::getAllStars(std::vector<float> *otherCoords,
                           std::vector<float> *otherMasses,
                           std::vector<lld> *count) {
   int err;
-  bool secondCall = true;
-  if (count->empty()) {
-    count->resize(numProcesses);
-    secondCall = false;
-  }
+  count->resize(numProcesses);
 
   (*count)[rank] = ids.size();
 
   lld starsCount = -(*count)[rank];
   for (int i = 0; i < numProcesses; i++) {
-    if (!secondCall) {
-      err = MPI_Bcast(count->data() + i, 1, MPI_LLD, i, MPI_COMM_WORLD);
-      if (err) {
-        // TODO
-      }
+    err = MPI_Bcast(count->data() + i, 1, MPI_LLD, i, MPI_COMM_WORLD);
+    if (err) {
+      // TODO
     }
     starsCount += (*count)[i];
   }
@@ -338,11 +336,9 @@ void Process::getAllStars(std::vector<float> *otherCoords,
     if (err) {
       // TODO
     }
-    if (!secondCall) {
-      err = MPI_Bcast(whereMasses, (*count)[i], MPI_FLOAT, i, MPI_COMM_WORLD);
-      if (err) {
-        // TODO
-      }
+    err = MPI_Bcast(whereMasses, (*count)[i], MPI_FLOAT, i, MPI_COMM_WORLD);
+    if (err) {
+      // TODO
     }
   }
 }
@@ -424,9 +420,9 @@ void Process::sendAllStarsForPrint() const {
 
   err = MPI_Gather(&count, 1, MPI_LLD, NULL, 0, MPI_LONG_LONG_INT, 0,
                    MPI_COMM_WORLD);
-    if (err) {
-      // TODO
-    }
+  if (err) {
+    // TODO
+  }
   if (count) {
     err = MPI_Send(ids.data(), count, MPI_LLD, 0, 100, MPI_COMM_WORLD);
     if (err) {

@@ -36,18 +36,10 @@ class Process {
   int rank;
   int numProcesses;
 
-  bool verbose;
   int hor;
   int ver;
 
-  GalInfo gal1;
-  GalInfo gal2;
-  SpaceInfo space;
-
-  std::vector<lld> ids;
-  std::vector<float> coords;
-  std::vector<float> speeds;
-  std::vector<float> masses;
+  Process();
 
   void readGal(const std::string &filename, int galNum,
                std::vector<Star> *stars);
@@ -64,6 +56,18 @@ class Process {
   void printStars(std::string gal1, std::string gal2) const;
 
  private:
+  std::vector<lld> ids;
+  std::vector<float> coords;
+  std::vector<float> speeds;
+  std::vector<float> accs;
+  std::vector<float> masses;
+
+  GalInfo gal1;
+  GalInfo gal2;
+  SpaceInfo space;
+
+  bool firstStep;
+
   void sendSpaceInfo() const;
   void recvSpaceInfo();
 
@@ -84,11 +88,10 @@ class Process {
 
   void getAllStars(std::vector<float> *coords, std::vector<float> *masses,
                    std::vector<lld> *count);
-  std::vector<float> calcAccValues(const std::vector<float> &otherCoords,
-                                 const std::vector<float> &otherMasses) const;
-  void updateCoords(const std::vector<float> &a, float delta);
-  void updateSpeeds(const std::vector<float> &a1, const std::vector<float> &a2,
-                    float delta);
+  void updateAccs(const std::vector<float> &otherCoords,
+                  const std::vector<float> &otherMasses);
+  void updateCoords(float delta);
+  void updateSpeeds(const std::vector<float> &oldAccs, float delta);
 };
 
 #endif

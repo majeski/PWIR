@@ -108,17 +108,14 @@ int main(int argc, char *argv[]) {
     p.recvInitialStars();
   }
 
-  int step = 0;
-  for (float t = 0.0; t < total; t += delta) {
+  for (int i = 0; i < total / delta; i++) {
     if (verbose) {
-      p.printStars("res1_" + std::to_string(step) + ".txt",
-                   "res2_" + std::to_string(step) + ".txt");
+      p.printStars("res1_" + std::to_string(i) + ".txt",
+                   "res2_" + std::to_string(i) + ".txt");
     }
 
     p.step(delta);
-    step++;
   }
-
   p.printStars("res1.txt", "res2.txt");
 
   MPI_Finalize();
