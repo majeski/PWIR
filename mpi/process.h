@@ -92,6 +92,17 @@ class Process {
                   const std::vector<float> &otherMasses);
   void updateCoords(float delta);
   void updateSpeeds(const std::vector<float> &oldAccs, float delta);
+
+  void exchangeStars();
+  void doExchangeStars(std::vector<lld> *ids, std::vector<float> *coords,
+                       std::vector<float> *speeds, std::vector<float> *accs);
+  std::vector<int> exchangeStarsPartners() const;
+  void sendStarsTo(int otherRank, const std::vector<lld> &ids,
+                   const std::vector<float> &coords,
+                   const std::vector<float> &speeds,
+                   const std::vector<float> &accs) const;
+  void recvStarsFrom(int otherRank, lld count, lld *ids, float *coords,
+                     float *speeds, float *accs) const;
 };
 
 #endif

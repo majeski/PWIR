@@ -109,12 +109,18 @@ int main(int argc, char *argv[]) {
   }
 
   for (int i = 0; i < total / delta; i++) {
+    if (p.rank == 0) {
+      printf("step %d\n", i);
+    }
     if (verbose) {
       p.printStars("res1_" + std::to_string(i) + ".txt",
                    "res2_" + std::to_string(i) + ".txt");
     }
 
     p.step(delta);
+  }
+  if (p.rank == 0) {
+    printf("final\n");
   }
   p.printStars("res1.txt", "res2.txt");
 

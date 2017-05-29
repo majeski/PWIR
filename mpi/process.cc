@@ -241,82 +241,8 @@ void Process::step(float delta) {
 
   updateCoords(delta);
   firstStep = false;
-}
-
-void Process::updateAccs(const std::vector<float> &otherCoords,
-                         const std::vector<float> &otherMasses) {
-  lld otherCount = otherCoords.size() / 2;
-  accs.resize(coords.size());
-
-  for (lld i = 0; i < ids.size(); i++) {
-    lld xIdx = i * 2;
-    lld yIdx = i * 2 + 1;
-    accs[xIdx] = 0;
-    accs[yIdx] = 0;
-
-    auto nextStar = [&](float otherX, float otherY, float otherMass) {
-      float x = coords[xIdx];
-      float y = coords[yIdx];
-      float mass = masses[i];
-      float dX, dY;
-      std::tie(dX, dY) = calcF(x, y, mass, otherX, otherY, otherMass);
-      accs[xIdx] += dX;
-      accs[yIdx] += dY;
-    };
-
-    for (lld j = 0; j < ids.size(); j++) {
-      if (i == j) {
-        continue;
-      }
-      nextStar(coords[j * 2], coords[j * 2 + 1], masses[j]);
-    }
-
-    for (lld j = 0; j < otherCount; j++) {
-      nextStar(otherCoords[j * 2], otherCoords[j * 2 + 1], otherMasses[j]);
-    }
-
-    accs[xIdx] /= -masses[i];
-    accs[yIdx] /= -masses[i];
-  }
-}
-
-void Process::updateCoords(float delta) {
-  for (lld i = 0; i < coords.size(); i++) {
-    coords[i] += speeds[i] * delta + 0.5 * accs[i] * delta * delta;
-  }
-
-  for (lld i = 0; i < coords.size(); i += 2) {
-    float &x = coords[i];
-    const float spaceWidth = space.cellWidth * ver;
-
-    if (x < space.x) {
-      float distX = space.x - x;
-      distX -= floor(distX / spaceWidth) * spaceWidth;
-      x = space.x + spaceWidth - distX;
-    } else if (x > space.x + spaceWidth) {
-      float distX = x - (space.x + spaceWidth);
-      distX -= floor(distX / spaceWidth) * spaceWidth;
-      x = space.x + distX;
-    }
-
-    float &y = coords[i + 1];
-    const float spaceHeight = space.cellHeight * hor;
-    if (y < space.y) {
-      float distY = space.y - y;
-      distY -= floor(distY / spaceHeight) * spaceHeight;
-      y = space.y + spaceHeight - distY;
-    } else if (x > space.x + spaceWidth) {
-      float distY = y - (space.y + spaceHeight);
-      distY -= floor(distY / spaceHeight) * spaceHeight;
-      y = space.y + distY;
-    }
-  }
-}
-
-void Process::updateSpeeds(const std::vector<float> &oldAccs, float delta) {
-  for (lld i = 0; i < speeds.size(); i++) {
-    speeds[i] += 0.5 * (oldAccs[i] + accs[i]) * delta;
-  }
+  exchangeStars();
+  updateMasses();
 }
 
 void Process::getOtherStars(std::vector<float> *otherCoords,
@@ -370,6 +296,211 @@ void Process::getOtherStars(std::vector<float> *otherCoords,
   }
 }
 
+void Process::updateAccs(const std::vector<float> &otherCoords,
+                         const std::vector<float> &otherMasses) {
+  lld otherCount = otherCoords.size() / 2;
+  accs.resize(coords.size());
+
+  for (lld i = 0; i < ids.size(); i++) {
+    lld xIdx = i * 2;
+    lld yIdx = i * 2 + 1;
+    accs[xIdx] = 0;
+    accs[yIdx] = 0;
+
+    auto nextStar = [&](float otherX, float otherY, float otherMass) {
+      float x = coords[xIdx];
+      float y = coords[yIdx];
+      float mass = masses[i];
+      float dX, dY;
+      std::tie(dX, dY) = calcF(x, y, mass, otherX, otherY, otherMass);
+      accs[xIdx] += dX;
+      accs[yIdx] += dY;
+    };
+
+    for (lld j = 0; j < ids.size(); j++) {
+      if (i == j) {
+        continue;
+      }
+      nextStar(coords[j * 2], coords[j * 2 + 1], masses[j]);
+    }
+
+    for (lld j = 0; j < otherCount; j++) {
+      nextStar(otherCoords[j * 2], otherCoords[j * 2 + 1], otherMasses[j]);
+    }
+
+    accs[xIdx] /= -masses[i];
+    accs[yIdx] /= -masses[i];
+  }
+}
+
+void Process::updateSpeeds(const std::vector<float> &oldAccs, float delta) {
+  for (lld i = 0; i < speeds.size(); i++) {
+    speeds[i] += 0.5 * (oldAccs[i] + accs[i]) * delta;
+  }
+}
+
+void Process::updateCoords(float delta) {
+  for (lld i = 0; i < coords.size(); i++) {
+    coords[i] += speeds[i] * delta + 0.5 * accs[i] * delta * delta;
+  }
+
+  for (lld i = 0; i < coords.size(); i += 2) {
+    float &x = coords[i];
+    const float spaceWidth = space.cellWidth * ver;
+
+    if (x < space.x) {
+      float distX = space.x - x;
+      distX -= floor(distX / spaceWidth) * spaceWidth;
+      x = space.x + spaceWidth - distX;
+    } else if (x > space.x + spaceWidth) {
+      float distX = x - (space.x + spaceWidth);
+      distX -= floor(distX / spaceWidth) * spaceWidth;
+      x = space.x + distX;
+    }
+
+    float &y = coords[i + 1];
+    const float spaceHeight = space.cellHeight * hor;
+    if (y < space.y) {
+      float distY = space.y - y;
+      distY -= floor(distY / spaceHeight) * spaceHeight;
+      y = space.y + spaceHeight - distY;
+    } else if (x > space.x + spaceWidth) {
+      float distY = y - (space.y + spaceHeight);
+      distY -= floor(distY / spaceHeight) * spaceHeight;
+      y = space.y + distY;
+    }
+  }
+}
+
+void Process::exchangeStars() {
+  std::vector<lld> ids[numProcesses];
+  std::vector<float> coords[numProcesses];
+  std::vector<float> speeds[numProcesses];
+  std::vector<float> accs[numProcesses];
+
+  for (lld i = 0; i < this->ids.size(); i++) {
+    const float xIdx = i * 2;
+    const float yIdx = i * 2 + 1;
+    int cell = starCell(this->coords[xIdx], this->coords[yIdx]);
+    ids[cell].push_back(this->ids[i]);
+    coords[cell].push_back(this->coords[xIdx]);
+    coords[cell].push_back(this->coords[yIdx]);
+    speeds[cell].push_back(this->speeds[xIdx]);
+    speeds[cell].push_back(this->speeds[yIdx]);
+    accs[cell].push_back(this->accs[xIdx]);
+    accs[cell].push_back(this->accs[yIdx]);
+  }
+
+  doExchangeStars(ids, coords, speeds, accs);
+
+  this->ids = ids[rank];
+  this->coords = coords[rank];
+  this->speeds = speeds[rank];
+  this->accs = accs[rank];
+}
+
+void Process::doExchangeStars(std::vector<lld> *ids, std::vector<float> *coords,
+                              std::vector<float> *speeds,
+                              std::vector<float> *accs) {
+  std::vector<lld> amountToSend;
+  std::vector<lld> amountToRecv;
+  int err;
+
+  amountToSend.resize(numProcesses);
+  amountToRecv.resize(numProcesses);
+  for (int i = 0; i < numProcesses; i++) {
+    amountToSend[i] = ids[i].size();
+  }
+
+  lld oldData = ids[rank].size();
+  lld countToRecv = 0;
+  for (int i = 0; i < numProcesses; i++) {
+    err = MPI_Scatter(amountToSend.data(), 1, MPI_LLD, amountToRecv.data() + i,
+                      1, MPI_LLD, i, MPI_COMM_WORLD);
+    if (err) {
+      // TODO
+    }
+    if (i != rank) {
+      countToRecv += amountToRecv[i];
+    }
+  }
+
+  ids[rank].resize(oldData + countToRecv);
+  coords[rank].resize((oldData + countToRecv) * 2);
+  speeds[rank].resize((oldData + countToRecv) * 2);
+  accs[rank].resize((oldData + countToRecv) * 2);
+
+  lld *idsPtr = ids[rank].data() + oldData;
+  float *coordsPtr = coords[rank].data() + (oldData * 2);
+  float *speedsPtr = speeds[rank].data() + (oldData * 2);
+  float *accsPtr = accs[rank].data() + (oldData * 2);
+
+  for (int partner : exchangeStarsPartners()) {
+    if (partner < rank && amountToSend[partner] > 0) {
+      sendStarsTo(partner, ids[partner], coords[partner], speeds[partner],
+                  accs[partner]);
+    }
+
+    lld count = amountToRecv[partner];
+    if (count > 0) {
+      recvStarsFrom(partner, count, idsPtr, coordsPtr, speedsPtr, accsPtr);
+      idsPtr += count;
+      coordsPtr += count * 2;
+      speedsPtr += count * 2;
+      accsPtr += count * 2;
+    }
+
+    if (partner > rank && amountToSend[partner] > 0) {
+      sendStarsTo(partner, ids[partner], coords[partner], speeds[partner],
+                  accs[partner]);
+    }
+  }
+}
+
+std::vector<int> Process::exchangeStarsPartners() const {
+  std::vector<int> partners;
+  for (int step = 1; step <= std::max(rank, numProcesses - rank - 1); step++) {
+    const int groupSize = step * 2;
+    const bool isLeftSide = rank % groupSize < groupSize / 2;
+    int newPartner1 = rank + (isLeftSide ? step : -step);
+    int newPartner2 = rank + (isLeftSide ? -step : step);
+    for (int newPartner : {newPartner1, newPartner2}) {
+      if (newPartner >= 0 && newPartner < numProcesses) {
+        partners.push_back(newPartner);
+      }
+    }
+  }
+
+  return partners;
+}
+
+void Process::sendStarsTo(int otherRank, const std::vector<lld> &ids,
+                          const std::vector<float> &coords,
+                          const std::vector<float> &speeds,
+                          const std::vector<float> &accs) const {
+  lld count = ids.size();
+  int err;
+  err = MPI_Send(ids.data(), count, MPI_LLD, otherRank, 1001, MPI_COMM_WORLD);
+  err = MPI_Send(coords.data(), count * 2, MPI_FLOAT, otherRank, 1002,
+                 MPI_COMM_WORLD);
+  err = MPI_Send(speeds.data(), count * 2, MPI_FLOAT, otherRank, 1003,
+                 MPI_COMM_WORLD);
+  err = MPI_Send(accs.data(), count * 2, MPI_FLOAT, otherRank, 1004,
+                 MPI_COMM_WORLD);
+}
+
+void Process::recvStarsFrom(int otherRank, lld count, lld *ids, float *coords,
+                            float *speeds, float *accs) const {
+  int err;
+  err = MPI_Recv(ids, count, MPI_LLD, otherRank, 1001, MPI_COMM_WORLD, NULL);
+  err = MPI_Recv(coords, count * 2, MPI_FLOAT, otherRank, 1002, MPI_COMM_WORLD,
+                 NULL);
+  err = MPI_Recv(speeds, count * 2, MPI_FLOAT, otherRank, 1003, MPI_COMM_WORLD,
+                 NULL);
+  err = MPI_Recv(accs, count * 2, MPI_FLOAT, otherRank, 1004, MPI_COMM_WORLD,
+                 NULL);
+}
+
 void Process::printStars(std::string gal1, std::string gal2) const {
   if (rank == 0) {
     auto stars = receiveAllStarsForPrint();
@@ -406,7 +537,9 @@ std::vector<Star> Process::receiveAllStarsForPrint() const {
   std::vector<Star> stars;
   std::vector<lld> tmpIds;
   std::vector<float> tmpCoords;
+  printf("----\n");
   for (int proc = 0; proc < numProcesses; proc++) {
+    printf("%d: %lld\n", proc, starsCount[proc]);
     if (proc == 0) {
       tmpIds = ids;
       tmpCoords = this->coords;
@@ -437,6 +570,7 @@ std::vector<Star> Process::receiveAllStarsForPrint() const {
       stars.push_back(star);
     }
   }
+  printf("----\n");
 
   return stars;
 }
