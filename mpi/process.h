@@ -86,8 +86,7 @@ class Process {
     return cellY * ver + cellX;
   }
 
-  void getOtherStars(std::vector<float> *coords, std::vector<float> *masses,
-                     std::vector<lld> *count);
+  void getOtherStars(std::vector<float> *coords, std::vector<float> *masses);
   void updateAccs(const std::vector<float> &otherCoords,
                   const std::vector<float> &otherMasses);
   void updateCoords(float delta);

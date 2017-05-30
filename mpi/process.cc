@@ -226,13 +226,12 @@ void Process::step(float delta) {
   std::vector<float> otherCoords;
   std::vector<float> otherMasses;
   std::vector<float> oldAccs;
-  std::vector<lld> count;
 
   if (!firstStep) {
     oldAccs = accs;
   }
 
-  getOtherStars(&otherCoords, &otherMasses, &count);
+  getOtherStars(&otherCoords, &otherMasses);
   updateAccs(otherCoords, otherMasses);
 
   if (!firstStep) {
@@ -246,20 +245,20 @@ void Process::step(float delta) {
 }
 
 void Process::getOtherStars(std::vector<float> *otherCoords,
-                            std::vector<float> *otherMasses,
-                            std::vector<lld> *count) {
+                            std::vector<float> *otherMasses) {
   int err;
-  count->resize(numProcesses);
+  std::vector<lld> count;
+  count.resize(numProcesses);
 
-  (*count)[rank] = ids.size();
+  count[rank] = ids.size();
 
-  lld starsCount = -(*count)[rank];
+  lld starsCount = -count[rank];
   for (int i = 0; i < numProcesses; i++) {
-    err = MPI_Bcast(count->data() + i, 1, MPI_LLD, i, MPI_COMM_WORLD);
+    err = MPI_Bcast(count.data() + i, 1, MPI_LLD, i, MPI_COMM_WORLD);
     if (err) {
       // TODO
     }
-    starsCount += (*count)[i];
+    starsCount += count[i];
   }
 
   otherCoords->resize(starsCount * 2);
@@ -269,7 +268,7 @@ void Process::getOtherStars(std::vector<float> *otherCoords,
   float *otherMassesPtr = otherMasses->data();
 
   for (int i = 0; i < numProcesses; i++) {
-    if ((*count)[i] == 0) {
+    if (count[i] == 0) {
       continue;
     }
 
@@ -280,16 +279,16 @@ void Process::getOtherStars(std::vector<float> *otherCoords,
       whereMasses = this->masses.data();
     } else {
       whereCoords = otherCoordsPtr;
-      otherCoordsPtr += (*count)[i] * 2;
+      otherCoordsPtr += count[i] * 2;
       whereMasses = otherMassesPtr;
-      otherMassesPtr += (*count)[i];
+      otherMassesPtr += count[i];
     }
 
-    err = MPI_Bcast(whereCoords, (*count)[i] * 2, MPI_FLOAT, i, MPI_COMM_WORLD);
+    err = MPI_Bcast(whereCoords, count[i] * 2, MPI_FLOAT, i, MPI_COMM_WORLD);
     if (err) {
       // TODO
     }
-    err = MPI_Bcast(whereMasses, (*count)[i], MPI_FLOAT, i, MPI_COMM_WORLD);
+    err = MPI_Bcast(whereMasses, count[i], MPI_FLOAT, i, MPI_COMM_WORLD);
     if (err) {
       // TODO
     }
