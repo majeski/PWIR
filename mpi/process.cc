@@ -72,19 +72,13 @@ void Process::exchangeSpaceInfo() {
 void Process::sendSpaceInfo() const {
   float spaceInfo[4] = {space.x, space.y, space.cellWidth, space.cellHeight};
 
-  int err = MPI_Bcast(spaceInfo, 4, MPI_FLOAT, 0, MPI_COMM_WORLD);
-  if (err) {
-    // TODO
-  }
+  MPI_Bcast(spaceInfo, 4, MPI_FLOAT, 0, MPI_COMM_WORLD);
 }
 
 void Process::recvSpaceInfo() {
   float spaceInfo[4];
 
-  int err = MPI_Bcast(spaceInfo, 4, MPI_FLOAT, 0, MPI_COMM_WORLD);
-  if (err) {
-    // TODO
-  }
+  MPI_Bcast(spaceInfo, 4, MPI_FLOAT, 0, MPI_COMM_WORLD);
 
   space.x = spaceInfo[0];
   space.y = spaceInfo[1];
@@ -104,19 +98,13 @@ void Process::sendGalaxiesInfo() const {
   float speedAndMass[6] = {gal1.vX, gal1.vY, gal1.mass,
                            gal2.vX, gal2.vY, gal2.mass};
 
-  int err = MPI_Bcast(speedAndMass, 6, MPI_FLOAT, 0, MPI_COMM_WORLD);
-  if (err) {
-    // TODO
-  }
+  MPI_Bcast(speedAndMass, 6, MPI_FLOAT, 0, MPI_COMM_WORLD);
 }
 
 void Process::recvGalaxiesInfo() {
   float speedAndMass[6];
 
-  int err = MPI_Bcast(speedAndMass, 6, MPI_FLOAT, 0, MPI_COMM_WORLD);
-  if (err) {
-    // TODO
-  }
+  MPI_Bcast(speedAndMass, 6, MPI_FLOAT, 0, MPI_COMM_WORLD);
 
   gal1.vX = speedAndMass[0];
   gal1.vY = speedAndMass[1];
@@ -142,26 +130,15 @@ void Process::distributeInitialStars(const std::vector<Star> &allStars) {
   }
 
   lld count;
-  int err = MPI_Scatter(starsCount, 1, MPI_LLD, &count, 1, MPI_LLD, 0,
-                        MPI_COMM_WORLD);
-  if (err) {
-    // TODO
-  }
+  MPI_Scatter(starsCount, 1, MPI_LLD, &count, 1, MPI_LLD, 0, MPI_COMM_WORLD);
 
   this->ids = std::move(ids[0]);
   this->coords = std::move(coords[0]);
   for (int i = 1; i < numProcesses; i++) {
     if (starsCount[i] > 0) {
-      err =
-          MPI_Send(ids[i].data(), starsCount[i], MPI_LLD, i, 0, MPI_COMM_WORLD);
-      if (err) {
-        // TODO
-      }
-      err = MPI_Send(coords[i].data(), starsCount[i] * 2, MPI_FLOAT, i, 1,
-                     MPI_COMM_WORLD);
-      if (err) {
-        // TODO
-      }
+      MPI_Send(ids[i].data(), starsCount[i], MPI_LLD, i, 0, MPI_COMM_WORLD);
+      MPI_Send(coords[i].data(), starsCount[i] * 2, MPI_FLOAT, i, 1,
+               MPI_COMM_WORLD);
     }
   }
 
@@ -172,26 +149,16 @@ void Process::distributeInitialStars(const std::vector<Star> &allStars) {
 void Process::recvInitialStars() {
   lld count;
 
-  int err =
-      MPI_Scatter(NULL, 0, MPI_LLD, &count, 1, MPI_LLD, 0, MPI_COMM_WORLD);
-  if (err) {
-    // TODO
-  }
+  MPI_Scatter(NULL, 0, MPI_LLD, &count, 1, MPI_LLD, 0, MPI_COMM_WORLD);
 
   if (count > 0) {
     ids.resize(count);
-    err = MPI_Recv(ids.data(), count, MPI_LLD, 0, 0, MPI_COMM_WORLD,
-                   MPI_STATUS_IGNORE);
-    if (err) {
-      // TODO
-    }
+    MPI_Recv(ids.data(), count, MPI_LLD, 0, 0, MPI_COMM_WORLD,
+             MPI_STATUS_IGNORE);
 
     coords.resize(count * 2);
-    err = MPI_Recv(coords.data(), count * 2, MPI_LLD, 0, 1, MPI_COMM_WORLD,
-                   MPI_STATUS_IGNORE);
-    if (err) {
-      // TODO
-    }
+    MPI_Recv(coords.data(), count * 2, MPI_LLD, 0, 1, MPI_COMM_WORLD,
+             MPI_STATUS_IGNORE);
   }
 
   setInitialSpeed();
@@ -247,7 +214,6 @@ void Process::step(float delta) {
 
 void Process::getOtherStars(std::vector<float> *otherCoords,
                             std::vector<float> *otherMasses) {
-  int err;
   std::vector<lld> count;
   count.resize(numProcesses);
 
@@ -255,10 +221,7 @@ void Process::getOtherStars(std::vector<float> *otherCoords,
 
   lld starsCount = -count[rank];
   for (int i = 0; i < numProcesses; i++) {
-    err = MPI_Bcast(count.data() + i, 1, MPI_LLD, i, MPI_COMM_WORLD);
-    if (err) {
-      // TODO
-    }
+    MPI_Bcast(count.data() + i, 1, MPI_LLD, i, MPI_COMM_WORLD);
     starsCount += count[i];
   }
 
@@ -285,14 +248,8 @@ void Process::getOtherStars(std::vector<float> *otherCoords,
       otherMassesPtr += count[i];
     }
 
-    err = MPI_Bcast(whereCoords, count[i] * 2, MPI_FLOAT, i, MPI_COMM_WORLD);
-    if (err) {
-      // TODO
-    }
-    err = MPI_Bcast(whereMasses, count[i], MPI_FLOAT, i, MPI_COMM_WORLD);
-    if (err) {
-      // TODO
-    }
+    MPI_Bcast(whereCoords, count[i] * 2, MPI_FLOAT, i, MPI_COMM_WORLD);
+    MPI_Bcast(whereMasses, count[i], MPI_FLOAT, i, MPI_COMM_WORLD);
   }
 }
 
@@ -507,7 +464,6 @@ void Process::doExchangeStars(std::vector<lld> *ids, std::vector<float> *coords,
                               std::vector<float> *accs) {
   std::vector<lld> amountToSend;
   std::vector<lld> amountToRecv;
-  int err;
 
   amountToSend.resize(numProcesses);
   amountToRecv.resize(numProcesses);
@@ -518,11 +474,8 @@ void Process::doExchangeStars(std::vector<lld> *ids, std::vector<float> *coords,
   lld oldData = ids[rank].size();
   lld countToRecv = 0;
   for (int i = 0; i < numProcesses; i++) {
-    err = MPI_Scatter(amountToSend.data(), 1, MPI_LLD, amountToRecv.data() + i,
-                      1, MPI_LLD, i, MPI_COMM_WORLD);
-    if (err) {
-      // TODO
-    }
+    MPI_Scatter(amountToSend.data(), 1, MPI_LLD, amountToRecv.data() + i, 1,
+                MPI_LLD, i, MPI_COMM_WORLD);
     if (i != rank) {
       countToRecv += amountToRecv[i];
     }
@@ -582,27 +535,24 @@ void Process::sendStarsTo(int otherRank, const std::vector<lld> &ids,
                           const std::vector<float> &speeds,
                           const std::vector<float> &accs) const {
   lld count = ids.size();
-  int err;
-  err = MPI_Send(ids.data(), count, MPI_LLD, otherRank, 1001, MPI_COMM_WORLD);
-  err = MPI_Send(coords.data(), count * 2, MPI_FLOAT, otherRank, 1002,
-                 MPI_COMM_WORLD);
-  err = MPI_Send(speeds.data(), count * 2, MPI_FLOAT, otherRank, 1003,
-                 MPI_COMM_WORLD);
-  err = MPI_Send(accs.data(), count * 2, MPI_FLOAT, otherRank, 1004,
-                 MPI_COMM_WORLD);
+  MPI_Send(ids.data(), count, MPI_LLD, otherRank, 1001, MPI_COMM_WORLD);
+  MPI_Send(coords.data(), count * 2, MPI_FLOAT, otherRank, 1002,
+           MPI_COMM_WORLD);
+  MPI_Send(speeds.data(), count * 2, MPI_FLOAT, otherRank, 1003,
+           MPI_COMM_WORLD);
+  MPI_Send(accs.data(), count * 2, MPI_FLOAT, otherRank, 1004, MPI_COMM_WORLD);
 }
 
 void Process::recvStarsFrom(int otherRank, lld count, lld *ids, float *coords,
                             float *speeds, float *accs) const {
-  int err;
-  err = MPI_Recv(ids, count, MPI_LLD, otherRank, 1001, MPI_COMM_WORLD,
-                 MPI_STATUS_IGNORE);
-  err = MPI_Recv(coords, count * 2, MPI_FLOAT, otherRank, 1002, MPI_COMM_WORLD,
-                 MPI_STATUS_IGNORE);
-  err = MPI_Recv(speeds, count * 2, MPI_FLOAT, otherRank, 1003, MPI_COMM_WORLD,
-                 MPI_STATUS_IGNORE);
-  err = MPI_Recv(accs, count * 2, MPI_FLOAT, otherRank, 1004, MPI_COMM_WORLD,
-                 MPI_STATUS_IGNORE);
+  MPI_Recv(ids, count, MPI_LLD, otherRank, 1001, MPI_COMM_WORLD,
+           MPI_STATUS_IGNORE);
+  MPI_Recv(coords, count * 2, MPI_FLOAT, otherRank, 1002, MPI_COMM_WORLD,
+           MPI_STATUS_IGNORE);
+  MPI_Recv(speeds, count * 2, MPI_FLOAT, otherRank, 1003, MPI_COMM_WORLD,
+           MPI_STATUS_IGNORE);
+  MPI_Recv(accs, count * 2, MPI_FLOAT, otherRank, 1004, MPI_COMM_WORLD,
+           MPI_STATUS_IGNORE);
 }
 
 void Process::printStars(std::string gal1, std::string gal2) const {
@@ -632,11 +582,7 @@ std::vector<Star> Process::receiveAllStarsForPrint() const {
   lld count = ids.size();
   lld starsCount[numProcesses];
 
-  int err =
-      MPI_Gather(&count, 1, MPI_LLD, starsCount, 1, MPI_LLD, 0, MPI_COMM_WORLD);
-  if (err) {
-    // TODO
-  }
+  MPI_Gather(&count, 1, MPI_LLD, starsCount, 1, MPI_LLD, 0, MPI_COMM_WORLD);
 
   std::vector<Star> stars;
   std::vector<lld> tmpIds;
@@ -652,16 +598,10 @@ std::vector<Star> Process::receiveAllStarsForPrint() const {
       tmpCoords.resize(starsCount[proc] * 2);
 
       // TODO status
-      err = MPI_Recv(tmpIds.data(), starsCount[proc], MPI_LLD, proc, 100,
-                     MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-      if (err) {
-        // TODO
-      }
-      err = MPI_Recv(tmpCoords.data(), starsCount[proc] * 2, MPI_FLOAT, proc,
-                     101, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-      if (err) {
-        // TODO
-      }
+      MPI_Recv(tmpIds.data(), starsCount[proc], MPI_LLD, proc, 100,
+               MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+      MPI_Recv(tmpCoords.data(), starsCount[proc] * 2, MPI_FLOAT, proc, 101,
+               MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     } else {
       continue;
     }
@@ -681,21 +621,10 @@ std::vector<Star> Process::receiveAllStarsForPrint() const {
 
 void Process::sendAllStarsForPrint() const {
   lld count = ids.size();
-  int err;
 
-  err = MPI_Gather(&count, 1, MPI_LLD, NULL, 0, MPI_LONG_LONG_INT, 0,
-                   MPI_COMM_WORLD);
-  if (err) {
-    // TODO
-  }
+  MPI_Gather(&count, 1, MPI_LLD, NULL, 0, MPI_LONG_LONG_INT, 0, MPI_COMM_WORLD);
   if (count) {
-    err = MPI_Send(ids.data(), count, MPI_LLD, 0, 100, MPI_COMM_WORLD);
-    if (err) {
-      // TODO
-    }
-    err = MPI_Send(coords.data(), count * 2, MPI_FLOAT, 0, 101, MPI_COMM_WORLD);
-    if (err) {
-      // TODO
-    }
+    MPI_Send(ids.data(), count, MPI_LLD, 0, 100, MPI_COMM_WORLD);
+    MPI_Send(coords.data(), count * 2, MPI_FLOAT, 0, 101, MPI_COMM_WORLD);
   }
 }
