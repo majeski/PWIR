@@ -180,14 +180,15 @@ void Process::recvInitialStars() {
 
   if (count > 0) {
     ids.resize(count);
-    err = MPI_Recv(ids.data(), count, MPI_LLD, 0, 0, MPI_COMM_WORLD, NULL);
+    err = MPI_Recv(ids.data(), count, MPI_LLD, 0, 0, MPI_COMM_WORLD,
+                   MPI_STATUS_IGNORE);
     if (err) {
       // TODO
     }
 
     coords.resize(count * 2);
-    err =
-        MPI_Recv(coords.data(), count * 2, MPI_LLD, 0, 1, MPI_COMM_WORLD, NULL);
+    err = MPI_Recv(coords.data(), count * 2, MPI_LLD, 0, 1, MPI_COMM_WORLD,
+                   MPI_STATUS_IGNORE);
     if (err) {
       // TODO
     }
@@ -231,7 +232,7 @@ void Process::step(float delta) {
     oldAccs = accs;
   }
 
-  getOtherStars(&otherCoords, &otherMasses);
+  getOtherStars2(&otherCoords, &otherMasses);
   updateAccs(otherCoords, otherMasses);
 
   if (!firstStep) {
@@ -292,6 +293,109 @@ void Process::getOtherStars(std::vector<float> *otherCoords,
     if (err) {
       // TODO
     }
+  }
+}
+
+void Process::getOtherStars2(std::vector<float> *otherCoords,
+                             std::vector<float> *otherMasses) {
+  const int rankX = rank % ver;
+  const int rankY = rank / ver;
+  auto exchangeWith = [&](int x, int y) {
+    int rank = y * ver + x;
+    if (x >= 0 && y >= 0 && x < ver && y < hor) {
+      printf("%d[%d, %d]<->%d[%d, %d]\n", this->rank, rankX, rankY, rank, x, y);
+      exchangeOtherStars(rank, otherCoords, otherMasses);
+      printf("%d[%d, %d]<->%d[%d, %d] done\n", this->rank, rankX, rankY, rank,
+             x, y);
+    }
+  };
+  // A B A
+  {
+    const bool firstInPair = rankX % 2 == 0;
+    if (firstInPair) {
+      exchangeWith(rankX + 1, rankY);
+      exchangeWith(rankX - 1, rankY);
+    } else {
+      exchangeWith(rankX - 1, rankY);
+      exchangeWith(rankX + 1, rankY);
+    }
+  }
+  // A
+  // B
+  // A
+  {
+    const bool firstInPair = rankY % 2 == 0;
+    if (firstInPair) {
+      exchangeWith(rankX, rankY + 1);
+      exchangeWith(rankX, rankY - 1);
+    } else {
+      exchangeWith(rankX, rankY - 1);
+      exchangeWith(rankX, rankY + 1);
+    }
+  }
+  // A
+  //  B
+  //   A
+  {
+    const bool firstInPair = std::min(rankY, rankX) % 2 == 0;
+    if (firstInPair) {
+      exchangeWith(rankX + 1, rankY + 1);
+      exchangeWith(rankX - 1, rankY - 1);
+    } else {
+      exchangeWith(rankX - 1, rankY - 1);
+      exchangeWith(rankX + 1, rankY + 1);
+    }
+  }
+  //   A
+  //  B
+  // A
+  {
+    const bool firstInPair = std::min(rankY, ver - rankX - 1) % 2 == 0;
+    if (firstInPair) {
+      exchangeWith(rankX - 1, rankY + 1);
+      exchangeWith(rankX + 1, rankY - 1);
+    } else {
+      exchangeWith(rankX + 1, rankY - 1);
+      exchangeWith(rankX - 1, rankY + 1);
+    }
+  }
+}
+
+void Process::exchangeOtherStars(int otherRank, std::vector<float> *otherCoords,
+                                 std::vector<float> *otherMasses) {
+  lld toSend = ids.size();
+  lld toRecv = 0;
+
+  auto send = [&]() {
+    MPI_Send(&toSend, 1, MPI_LLD, otherRank, 601, MPI_COMM_WORLD);
+    if (toSend > 0) {
+      MPI_Send(coords.data(), toSend * 2, MPI_FLOAT, otherRank, 602,
+               MPI_COMM_WORLD);
+      MPI_Send(masses.data(), toSend, MPI_FLOAT, otherRank, 603,
+               MPI_COMM_WORLD);
+    }
+  };
+  auto recv = [&]() {
+    MPI_Recv(&toRecv, 1, MPI_LLD, otherRank, 601, MPI_COMM_WORLD,
+             MPI_STATUS_IGNORE);
+    if (toRecv > 0) {
+      lld oldSize = otherMasses->size();
+      otherCoords->resize((oldSize + toRecv) * 2);
+      otherMasses->resize(oldSize + toRecv);
+
+      MPI_Recv(otherCoords->data() + oldSize * 2, toRecv * 2, MPI_FLOAT,
+               otherRank, 602, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+      MPI_Recv(otherMasses->data() + oldSize, toRecv, MPI_FLOAT, otherRank, 603,
+               MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    }
+  };
+
+  if (rank < otherRank) {
+    send();
+    recv();
+  } else {
+    recv();
+    send();
   }
 }
 
@@ -491,13 +595,14 @@ void Process::sendStarsTo(int otherRank, const std::vector<lld> &ids,
 void Process::recvStarsFrom(int otherRank, lld count, lld *ids, float *coords,
                             float *speeds, float *accs) const {
   int err;
-  err = MPI_Recv(ids, count, MPI_LLD, otherRank, 1001, MPI_COMM_WORLD, NULL);
+  err = MPI_Recv(ids, count, MPI_LLD, otherRank, 1001, MPI_COMM_WORLD,
+                 MPI_STATUS_IGNORE);
   err = MPI_Recv(coords, count * 2, MPI_FLOAT, otherRank, 1002, MPI_COMM_WORLD,
-                 NULL);
+                 MPI_STATUS_IGNORE);
   err = MPI_Recv(speeds, count * 2, MPI_FLOAT, otherRank, 1003, MPI_COMM_WORLD,
-                 NULL);
+                 MPI_STATUS_IGNORE);
   err = MPI_Recv(accs, count * 2, MPI_FLOAT, otherRank, 1004, MPI_COMM_WORLD,
-                 NULL);
+                 MPI_STATUS_IGNORE);
 }
 
 void Process::printStars(std::string gal1, std::string gal2) const {
@@ -548,12 +653,12 @@ std::vector<Star> Process::receiveAllStarsForPrint() const {
 
       // TODO status
       err = MPI_Recv(tmpIds.data(), starsCount[proc], MPI_LLD, proc, 100,
-                     MPI_COMM_WORLD, NULL);
+                     MPI_COMM_WORLD, MPI_STATUS_IGNORE);
       if (err) {
         // TODO
       }
       err = MPI_Recv(tmpCoords.data(), starsCount[proc] * 2, MPI_FLOAT, proc,
-                     101, MPI_COMM_WORLD, NULL);
+                     101, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
       if (err) {
         // TODO
       }
