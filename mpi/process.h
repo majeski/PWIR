@@ -88,12 +88,15 @@ class Process {
 
   void getOtherStars(std::vector<float> *coords, std::vector<float> *masses);
   void getOtherStars2(std::vector<float> *coords, std::vector<float> *masses);
-  void exchangeOtherStars(int otherRank, std::vector<float> *coords, std::vector<float> *masses);
+  void exchangeOtherStars(int otherRank, std::vector<float> *coords,
+                          std::vector<float> *masses);
 
-  void updateAccs(const std::vector<float> &otherCoords,
-                  const std::vector<float> &otherMasses);
-  void updateCoords(float delta);
-  void updateSpeeds(const std::vector<float> &oldAccs, float delta);
+  std::vector<lld> updateAccs(const std::vector<float> &otherCoords,
+                              const std::vector<float> &otherMasses);
+  void updateCoords(float delta, const std::vector<lld> &toSkip);
+  void updateSpeeds(const std::vector<float> &oldAccs, float delta,
+                    const std::vector<lld> &toSkip);
+  void fixCoords();
 
   void exchangeStars();
   void doExchangeStars(std::vector<lld> *ids, std::vector<float> *coords,

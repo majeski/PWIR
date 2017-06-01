@@ -1,4 +1,6 @@
+#include <float.h>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
@@ -200,13 +202,13 @@ void Process::step(float delta) {
   }
 
   getOtherStars2(&otherCoords, &otherMasses);
-  updateAccs(otherCoords, otherMasses);
+  auto toSkip = updateAccs(otherCoords, otherMasses);
 
   if (!firstStep) {
-    updateSpeeds(oldAccs, delta);
+    updateSpeeds(oldAccs, delta, toSkip);
   }
 
-  updateCoords(delta);
+  updateCoords(delta, toSkip);
   firstStep = false;
   exchangeStars();
   updateMasses();
@@ -356,9 +358,10 @@ void Process::exchangeOtherStars(int otherRank, std::vector<float> *otherCoords,
   }
 }
 
-void Process::updateAccs(const std::vector<float> &otherCoords,
-                         const std::vector<float> &otherMasses) {
+std::vector<lld> Process::updateAccs(const std::vector<float> &otherCoords,
+                                     const std::vector<float> &otherMasses) {
   lld otherCount = otherCoords.size() / 2;
+  std::vector<lld> toSkip;
   accs.resize(coords.size());
 
   for (lld i = 0; i < ids.size(); i++) {
@@ -388,22 +391,44 @@ void Process::updateAccs(const std::vector<float> &otherCoords,
       nextStar(otherCoords[j * 2], otherCoords[j * 2 + 1], otherMasses[j]);
     }
 
+    if (-accs[xIdx] > FLT_MAX / 2 || -accs[yIdx] > FLT_MAX / 2) {
+      toSkip.push_back(xIdx / 2);
+    }
     accs[xIdx] /= -masses[i];
     accs[yIdx] /= -masses[i];
   }
+
+  return toSkip;
 }
 
-void Process::updateSpeeds(const std::vector<float> &oldAccs, float delta) {
+void Process::updateSpeeds(const std::vector<float> &oldAccs, float delta,
+                           const std::vector<lld> &toSkip) {
+  auto curToSkip = toSkip.begin();
   for (lld i = 0; i < speeds.size(); i++) {
+    if (curToSkip != toSkip.end() && *curToSkip == i / 2) {
+      ++curToSkip;
+      i++;
+      continue;
+    }
     speeds[i] += 0.5 * (oldAccs[i] + accs[i]) * delta;
   }
 }
 
-void Process::updateCoords(float delta) {
+void Process::updateCoords(float delta, const std::vector<lld> &toSkip) {
+  auto curToSkip = toSkip.begin();
   for (lld i = 0; i < coords.size(); i++) {
+    if (curToSkip != toSkip.end() && *curToSkip == i / 2) {
+      ++curToSkip;
+      i++;
+      continue;
+    }
     coords[i] += speeds[i] * delta + 0.5 * accs[i] * delta * delta;
   }
 
+  fixCoords();
+}
+
+void Process::fixCoords() {
   for (lld i = 0; i < coords.size(); i += 2) {
     float &x = coords[i];
     const float spaceWidth = space.cellWidth * ver;
