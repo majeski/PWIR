@@ -138,10 +138,16 @@ void AbstractProcess::distributeInitialStars(
   updateMasses();
 }
 
+int AbstractProcess::starCell(float x, float y) const {
+  int cellX = std::min(int((x - space.x) / space.cellWidth), ver - 1);
+  int cellY = std::min(int((y - space.y) / space.cellHeight), hor - 1);
+  return cellY * ver + cellX;
+}
+
 void AbstractProcess::recvInitialStars() {
   lld count;
 
-  MPI_Scatter(NULL, 0, MPI_LLD, &count, 1, MPI_LLD, 0, MPI_COMM_WORLD);
+  MPI_Scatter(nullptr, 0, MPI_LLD, &count, 1, MPI_LLD, 0, MPI_COMM_WORLD);
 
   if (count > 0) {
     ids.resize(count);
@@ -174,10 +180,10 @@ void AbstractProcess::updateMasses() {
 
 inline std::pair<float, float> calcF(float star1X, float star1Y, float mass1,
                                      float star2X, float star2Y, float mass2) {
-  float G = 155893.597;
-  float dX = star1X - star2X;
-  float dY = star1Y - star2Y;
-  float norm = sqrt(dX * dX + dY * dY);
+  static const float G = 155893.597;
+  const float dX = star1X - star2X;
+  const float dY = star1Y - star2Y;
+  const float norm = sqrt(dX * dX + dY * dY);
   return {(G * mass1 * mass2 * (star1X - star2X)) / (norm * norm * norm),
           (G * mass1 * mass2 * (star1Y - star2Y)) / (norm * norm * norm)};
 }
@@ -192,7 +198,7 @@ void AbstractProcess::step(float delta) {
   }
 
   getOtherStars(&otherCoords, &otherMasses);
-  auto toSkip = updateAccs(otherCoords, otherMasses);
+  const auto toSkip = updateAccs(otherCoords, otherMasses);
 
   if (!firstStep) {
     updateSpeeds(oldAccs, delta, toSkip);
@@ -212,8 +218,8 @@ std::vector<lld> AbstractProcess::updateAccs(
   accs.resize(coords.size());
 
   for (lld i = 0; i < ids.size(); i++) {
-    lld xIdx = i * 2;
-    lld yIdx = i * 2 + 1;
+    const lld xIdx = i * 2;
+    const lld yIdx = i * 2 + 1;
     accs[xIdx] = 0;
     accs[yIdx] = 0;
 
@@ -280,7 +286,9 @@ void AbstractProcess::updateCoords(float delta,
 void AbstractProcess::fixCoords() {
   for (lld i = 0; i < coords.size(); i += 2) {
     float &x = coords[i];
+    float &y = coords[i + 1];
     const float spaceWidth = space.cellWidth * ver;
+    const float spaceHeight = space.cellHeight * hor;
 
     if (x < space.x) {
       float distX = space.x - x;
@@ -292,8 +300,6 @@ void AbstractProcess::fixCoords() {
       x = space.x + distX;
     }
 
-    float &y = coords[i + 1];
-    const float spaceHeight = space.cellHeight * hor;
     if (y < space.y) {
       float distY = space.y - y;
       distY -= floor(distY / spaceHeight) * spaceHeight;
@@ -315,7 +321,7 @@ void AbstractProcess::exchangeStars() {
   for (lld i = 0; i < this->ids.size(); i++) {
     const float xIdx = i * 2;
     const float yIdx = i * 2 + 1;
-    int cell = starCell(this->coords[xIdx], this->coords[yIdx]);
+    const int cell = starCell(this->coords[xIdx], this->coords[yIdx]);
     ids[cell].push_back(this->ids[i]);
     coords[cell].push_back(this->coords[xIdx]);
     coords[cell].push_back(this->coords[yIdx]);
@@ -366,29 +372,35 @@ void AbstractProcess::doExchangeStars(std::vector<lld> *ids,
   float *speedsPtr = speeds[rank].data() + (oldData * 2);
   float *accsPtr = accs[rank].data() + (oldData * 2);
 
-  for (int partner : exchangeStarsPartners()) {
-    if (partner < rank && amountToSend[partner] > 0) {
-      sendStarsTo(partner, ids[partner], coords[partner], speeds[partner],
-                  accs[partner]);
+  auto send = [&](int otherRank) {
+    if (amountToSend[otherRank]) {
+      sendStarsTo(otherRank, ids[otherRank], coords[otherRank],
+                  speeds[otherRank], accs[otherRank]);
     }
-
-    lld count = amountToRecv[partner];
-    if (count > 0) {
-      recvStarsFrom(partner, count, idsPtr, coordsPtr, speedsPtr, accsPtr);
+  };
+  auto recv = [&](int otherRank) {
+    if (amountToRecv[otherRank]) {
+      lld count = amountToRecv[otherRank];
+      recvStarsFrom(otherRank, count, idsPtr, coordsPtr, speedsPtr, accsPtr);
       idsPtr += count;
       coordsPtr += count * 2;
       speedsPtr += count * 2;
       accsPtr += count * 2;
     }
+  };
 
-    if (partner > rank && amountToSend[partner] > 0) {
-      sendStarsTo(partner, ids[partner], coords[partner], speeds[partner],
-                  accs[partner]);
+  for (int otherRank : exchangeStarsOrder()) {
+    if (rank < otherRank) {
+      send(otherRank);
+      recv(otherRank);
+    } else {
+      recv(otherRank);
+      send(otherRank);
     }
   }
 }
 
-std::vector<int> AbstractProcess::exchangeStarsPartners() const {
+std::vector<int> AbstractProcess::exchangeStarsOrder() const {
   std::vector<int> partners;
   for (int step = 1; step <= std::max(rank, numProcesses - rank - 1); step++) {
     const int groupSize = step * 2;

@@ -74,13 +74,13 @@ bool readParams(std::unordered_map<std::string, std::string> args,
 int main(int argc, char *argv[]) {
   std::unique_ptr<AbstractProcess> p;
 #ifdef V1
-    p.reset(new Process1());
+  p.reset(new Process1());
 #elif V2
-    p.reset(new Process2());
+  p.reset(new Process2());
 #elif V3
-    // TODO
+// TODO
 #else
-    assert(false && "No version choosen");
+  assert(false && "No version choosen");
 #endif
 
   MPI_Init(&argc, &argv);
@@ -105,34 +105,40 @@ int main(int argc, char *argv[]) {
 
   std::vector<Star> stars;
 
-  if (p->rank == 0) {
-    p->readGal(std::move(gal1Filename), 1, &stars);
-    p->readGal(std::move(gal2Filename), 2, &stars);
-    p->calcSpace(stars);
-  }
-
-  p->exchangeSpaceInfo();
-  p->exchangeGalaxiesInfo();
-
-  if (p->rank == 0) {
-    p->distributeInitialStars(stars);
-    stars.clear();
-  } else {
-    p->recvInitialStars();
-  }
-
-  for (int i = 0; i < total / delta; i++) {
+  try {
     if (p->rank == 0) {
-      printf("step %d\n", i);
-    }
-    if (verbose) {
-      p->printStars("res1_" + std::to_string(i) + ".txt",
-                    "res2_" + std::to_string(i) + ".txt");
+      p->readGal(std::move(gal1Filename), 1, &stars);
+      p->readGal(std::move(gal2Filename), 2, &stars);
+      p->calcSpace(stars);
     }
 
-    p->step(delta);
+    p->exchangeSpaceInfo();
+    p->exchangeGalaxiesInfo();
+
+    if (p->rank == 0) {
+      p->distributeInitialStars(stars);
+      stars.clear();
+    } else {
+      p->recvInitialStars();
+    }
+
+    for (int i = 0; i < total / delta; i++) {
+      if (p->rank == 0) {
+        printf("step %d\n", i);
+      }
+      if (verbose) {
+        p->printStars("res1_" + std::to_string(i) + ".txt",
+                      "res2_" + std::to_string(i) + ".txt");
+      }
+
+      p->step(delta);
+    }
+    p->printStars("res1.txt", "res2.txt");
+  } catch (std::exception &e) {
+    std::cerr << e.what() << "\n";
+    MPI_Abort(MPI_COMM_WORLD, MPI_ERR_IO);
+    return EXIT_FAILURE;
   }
-  p->printStars("res1.txt", "res2.txt");
 
   MPI_Finalize();
 }

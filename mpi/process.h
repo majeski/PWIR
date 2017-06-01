@@ -76,6 +76,12 @@ class AbstractProcess {
   GalInfo gal2;
   SpaceInfo space;
 
+  virtual void getOtherStars(std::vector<float> *coords,
+                             std::vector<float> *masses) = 0;
+
+ private:
+  bool firstStep;
+
   void sendSpaceInfo() const;
   void recvSpaceInfo();
 
@@ -88,14 +94,7 @@ class AbstractProcess {
   void setInitialSpeed();
   void updateMasses();
 
-  inline int starCell(float x, float y) const {
-    int cellX = (x - space.x) / space.cellWidth;
-    int cellY = (y - space.y) / space.cellHeight;
-    return cellY * ver + cellX;
-  }
-
-  virtual void getOtherStars(std::vector<float> *coords,
-                             std::vector<float> *masses) = 0;
+  int starCell(float x, float y) const;
 
   std::vector<lld> updateAccs(const std::vector<float> &otherCoords,
                               const std::vector<float> &otherMasses);
@@ -107,16 +106,13 @@ class AbstractProcess {
   void exchangeStars();
   void doExchangeStars(std::vector<lld> *ids, std::vector<float> *coords,
                        std::vector<float> *speeds, std::vector<float> *accs);
-  std::vector<int> exchangeStarsPartners() const;
+  std::vector<int> exchangeStarsOrder() const;
   void sendStarsTo(int otherRank, const std::vector<lld> &ids,
                    const std::vector<float> &coords,
                    const std::vector<float> &speeds,
                    const std::vector<float> &accs) const;
   void recvStarsFrom(int otherRank, lld count, lld *ids, float *coords,
                      float *speeds, float *accs) const;
-
- private:
-  bool firstStep;
 };
 
 #endif
