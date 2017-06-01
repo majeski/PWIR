@@ -1,12 +1,15 @@
+#include <cassert>
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
+#include <memory>
 #include <unordered_map>
 #include <vector>
 
 #include <mpi.h>
 
-#include "process.h"
+#include "process_1.h"
+#include "process_2.h"
 
 std::unordered_map<std::string, std::string> parseArgs(int argc, char **argv) {
   std::unordered_map<std::string, std::string> args;
@@ -26,9 +29,10 @@ std::unordered_map<std::string, std::string> parseArgs(int argc, char **argv) {
   return args;
 }
 
-bool readParams(std::unordered_map<std::string, std::string> args, Process *p,
-                bool *verbose, std::string *gal1, std::string *gal2,
-                float *delta, float *total) {
+bool readParams(std::unordered_map<std::string, std::string> args,
+                std::unique_ptr<AbstractProcess> &p, bool *verbose,
+                std::string *gal1, std::string *gal2, float *delta,
+                float *total) {
   for (auto key : {"hor", "ver", "gal1", "gal2", "delta", "total"}) {
     std::string key2 = key;
     if (args.count(key2)) {
@@ -68,23 +72,32 @@ bool readParams(std::unordered_map<std::string, std::string> args, Process *p,
 }
 
 int main(int argc, char *argv[]) {
-  Process p;
+  std::unique_ptr<AbstractProcess> p;
+#ifdef V1
+    p.reset(new Process1());
+#elif V2
+    p.reset(new Process2());
+#elif V3
+    // TODO
+#else
+    assert(false && "No version choosen");
+#endif
 
   MPI_Init(&argc, &argv);
-  MPI_Comm_size(MPI_COMM_WORLD, &p.numProcesses);
-  MPI_Comm_rank(MPI_COMM_WORLD, &p.rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &p->numProcesses);
+  MPI_Comm_rank(MPI_COMM_WORLD, &p->rank);
 
   auto args = parseArgs(argc, argv);
   std::string gal1Filename, gal2Filename;
   float delta, total;
   bool verbose;
-  if (!readParams(args, &p, &verbose, &gal1Filename, &gal2Filename, &delta,
+  if (!readParams(args, p, &verbose, &gal1Filename, &gal2Filename, &delta,
                   &total)) {
     MPI_Finalize();
     return EXIT_FAILURE;
   }
 
-  if (p.hor * p.ver != p.numProcesses) {
+  if (p->hor * p->ver != p->numProcesses) {
     std::cerr << "incorrect number of processes\n";
     MPI_Finalize();
     return EXIT_FAILURE;
@@ -92,37 +105,34 @@ int main(int argc, char *argv[]) {
 
   std::vector<Star> stars;
 
-  if (p.rank == 0) {
-    p.readGal(std::move(gal1Filename), 1, &stars);
-    p.readGal(std::move(gal2Filename), 2, &stars);
-    p.calcSpace(stars);
+  if (p->rank == 0) {
+    p->readGal(std::move(gal1Filename), 1, &stars);
+    p->readGal(std::move(gal2Filename), 2, &stars);
+    p->calcSpace(stars);
   }
 
-  p.exchangeSpaceInfo();
-  p.exchangeGalaxiesInfo();
+  p->exchangeSpaceInfo();
+  p->exchangeGalaxiesInfo();
 
-  if (p.rank == 0) {
-    p.distributeInitialStars(stars);
+  if (p->rank == 0) {
+    p->distributeInitialStars(stars);
     stars.clear();
   } else {
-    p.recvInitialStars();
+    p->recvInitialStars();
   }
 
   for (int i = 0; i < total / delta; i++) {
-    if (p.rank == 0) {
+    if (p->rank == 0) {
       printf("step %d\n", i);
     }
     if (verbose) {
-      p.printStars("res1_" + std::to_string(i) + ".txt",
-                   "res2_" + std::to_string(i) + ".txt");
+      p->printStars("res1_" + std::to_string(i) + ".txt",
+                    "res2_" + std::to_string(i) + ".txt");
     }
 
-    p.step(delta);
+    p->step(delta);
   }
-  if (p.rank == 0) {
-    printf("final\n");
-  }
-  p.printStars("res1.txt", "res2.txt");
+  p->printStars("res1.txt", "res2.txt");
 
   MPI_Finalize();
 }

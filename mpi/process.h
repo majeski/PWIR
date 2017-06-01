@@ -1,9 +1,18 @@
 #ifndef PROCESS__H
 #define PROCESS__H
 
+#include <float.h>
+#include <cmath>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <iostream>
 #include <vector>
 
+#include <mpi.h>
+
 using lld = long long int;
+#define MPI_LLD MPI_LONG_LONG_INT
 
 struct GalInfo {
   float vX;
@@ -31,7 +40,7 @@ struct Star {
   }
 };
 
-class Process {
+class AbstractProcess {
  public:
   int rank;
   int numProcesses;
@@ -39,7 +48,8 @@ class Process {
   int hor;
   int ver;
 
-  Process();
+  AbstractProcess();
+  virtual ~AbstractProcess() = default;
 
   void readGal(const std::string &filename, int galNum,
                std::vector<Star> *stars);
@@ -55,7 +65,7 @@ class Process {
 
   void printStars(std::string gal1, std::string gal2) const;
 
- private:
+ protected:
   std::vector<lld> ids;
   std::vector<float> coords;
   std::vector<float> speeds;
@@ -65,8 +75,6 @@ class Process {
   GalInfo gal1;
   GalInfo gal2;
   SpaceInfo space;
-
-  bool firstStep;
 
   void sendSpaceInfo() const;
   void recvSpaceInfo();
@@ -86,10 +94,8 @@ class Process {
     return cellY * ver + cellX;
   }
 
-  void getOtherStars(std::vector<float> *coords, std::vector<float> *masses);
-  void getOtherStars2(std::vector<float> *coords, std::vector<float> *masses);
-  void exchangeOtherStars(int otherRank, std::vector<float> *coords,
-                          std::vector<float> *masses);
+  virtual void getOtherStars(std::vector<float> *coords,
+                             std::vector<float> *masses) = 0;
 
   std::vector<lld> updateAccs(const std::vector<float> &otherCoords,
                               const std::vector<float> &otherMasses);
@@ -108,6 +114,9 @@ class Process {
                    const std::vector<float> &accs) const;
   void recvStarsFrom(int otherRank, lld count, lld *ids, float *coords,
                      float *speeds, float *accs) const;
+
+ private:
+  bool firstStep;
 };
 
 #endif
