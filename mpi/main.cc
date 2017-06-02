@@ -97,7 +97,7 @@ int main(int argc, char *argv[]) {
     return EXIT_FAILURE;
   }
 
-  if (p->hor * p->ver != p->numProcesses) {
+  if ((lld)p->hor * p->ver != p->numProcesses) {
     std::cerr << "incorrect number of processes\n";
     MPI_Finalize();
     return EXIT_FAILURE;

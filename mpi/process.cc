@@ -472,37 +472,55 @@ void AbstractProcess::printStars(std::string gal1, std::string gal2) const {
 std::vector<Star> AbstractProcess::receiveAllStarsForPrint() const {
   lld count = ids.size();
   lld starsCount[numProcesses];
+  std::vector<MPI_Request> requests;
 
   MPI_Gather(&count, 1, MPI_LLD, starsCount, 1, MPI_LLD, 0, MPI_COMM_WORLD);
-
-  std::vector<Star> stars;
-  std::vector<lld> tmpIds;
-  std::vector<float> tmpCoords;
-  for (int proc = 0; proc < numProcesses; proc++) {
-    if (proc == 0) {
-      tmpIds = ids;
-      tmpCoords = this->coords;
-    } else if (starsCount[proc]) {
-      tmpIds.resize(starsCount[proc]);
-      tmpCoords.resize(starsCount[proc] * 2);
-
-      MPI_Recv(tmpIds.data(), starsCount[proc], MPI_LLD, proc, 100,
-               MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-      MPI_Recv(tmpCoords.data(), starsCount[proc] * 2, MPI_FLOAT, proc, 101,
-               MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    } else {
-      continue;
-    }
-
-    for (int i = 0; i < tmpIds.size(); i++) {
-      Star star;
-      star.id = tmpIds[i];
-      star.x = tmpCoords[i * 2];
-      star.y = tmpCoords[i * 2 + 1];
-      stars.push_back(star);
+  lld countSum = 0;
+  for (int i = 1; i < numProcesses; i++) {
+    countSum += starsCount[i];
+    if (starsCount[i] > 0) {
+      requests.resize(requests.size() + 2);
     }
   }
 
+  std::vector<lld> tmpIds;
+  std::vector<float> tmpCoords;
+  tmpIds.resize(countSum);
+  tmpCoords.resize(countSum * 2);
+  int lastRequest = 0;
+
+  lld *idsPtr = tmpIds.data();
+  float *coordsPtr = tmpCoords.data();
+  for (int proc = 1; proc < numProcesses; proc++) {
+    lld count = starsCount[proc];
+    if (count) {
+      MPI_Irecv(idsPtr, count, MPI_LLD, proc, 100, MPI_COMM_WORLD,
+               &(requests[lastRequest++]));
+      MPI_Irecv(coordsPtr, count * 2, MPI_FLOAT, proc, 101, MPI_COMM_WORLD,
+               &(requests[lastRequest++]));
+      idsPtr += count;
+      coordsPtr += count * 2;
+    }
+  }
+
+  std::vector<Star> stars;
+  stars.reserve(ids.size() + countSum);
+  for (lld i = 0; i < ids.size(); i++) {
+    Star star;
+    star.id = ids[i];
+    star.x = coords[i * 2];
+    star.y = coords[i * 2 + 1];
+    stars.push_back(star);
+  }
+
+  MPI_Waitall(requests.size(), requests.data(), MPI_STATUSES_IGNORE);
+  for (lld i = 0; i < tmpIds.size(); i++) {
+    Star star;
+    star.id = tmpIds[i];
+    star.x = tmpCoords[i * 2];
+    star.y = tmpCoords[i * 2 + 1];
+    stars.push_back(star);
+  }
   return stars;
 }
 
