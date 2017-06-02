@@ -111,7 +111,7 @@ class AbstractProcess {
                    const std::vector<float> &coords,
                    const std::vector<float> &speeds,
                    const std::vector<float> &accs) const;
-  void recvStarsFrom(int otherRank, lld count, lld *ids, float *coords,
+  void recvStarsFrom(int otherRank, int count, lld *ids, float *coords,
                      float *speeds, float *accs) const;
 };
 

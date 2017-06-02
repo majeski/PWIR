@@ -5,7 +5,7 @@ AbstractProcess::AbstractProcess() : firstStep(true) {}
 void AbstractProcess::readGal(const std::string &filename, int galNum,
                               std::vector<Star> *stars) {
   FILE *f = fopen(filename.c_str(), "r");
-  if (f == NULL) {
+  if (!f) {
     throw std::runtime_error("Unable to open file " + filename);
   }
 
@@ -109,7 +109,7 @@ void AbstractProcess::distributeInitialStars(
     const std::vector<Star> &allStars) {
   std::vector<lld> ids[numProcesses];
   std::vector<float> coords[numProcesses];
-  lld starsCount[numProcesses];
+  int starsCount[numProcesses];
 
   for (const auto &star : allStars) {
     int cell = starCell(star.x, star.y);
@@ -121,8 +121,9 @@ void AbstractProcess::distributeInitialStars(
     starsCount[i] = ids[i].size();
   }
 
-  lld count;
-  MPI_Scatter(starsCount, 1, MPI_LLD, &count, 1, MPI_LLD, 0, MPI_COMM_WORLD);
+  int count;
+  MPI_Scatter(starsCount, 1, MPI_INTEGER, &count, 1, MPI_INTEGER, 0,
+              MPI_COMM_WORLD);
 
   this->ids = std::move(ids[0]);
   this->coords = std::move(coords[0]);
@@ -145,9 +146,9 @@ int AbstractProcess::starCell(float x, float y) const {
 }
 
 void AbstractProcess::recvInitialStars() {
-  lld count;
-
-  MPI_Scatter(nullptr, 0, MPI_LLD, &count, 1, MPI_LLD, 0, MPI_COMM_WORLD);
+  int count;
+  MPI_Scatter(nullptr, 0, MPI_INTEGER, &count, 1, MPI_INTEGER, 0,
+              MPI_COMM_WORLD);
 
   if (count > 0) {
     ids.resize(count);
@@ -343,8 +344,8 @@ void AbstractProcess::doExchangeStars(std::vector<lld> *ids,
                                       std::vector<float> *coords,
                                       std::vector<float> *speeds,
                                       std::vector<float> *accs) {
-  std::vector<lld> amountToSend;
-  std::vector<lld> amountToRecv;
+  std::vector<int> amountToSend;
+  std::vector<int> amountToRecv;
 
   amountToSend.resize(numProcesses);
   amountToRecv.resize(numProcesses);
@@ -355,8 +356,8 @@ void AbstractProcess::doExchangeStars(std::vector<lld> *ids,
   lld oldData = ids[rank].size();
   lld countToRecv = 0;
   for (int i = 0; i < numProcesses; i++) {
-    MPI_Scatter(amountToSend.data(), 1, MPI_LLD, amountToRecv.data() + i, 1,
-                MPI_LLD, i, MPI_COMM_WORLD);
+    MPI_Scatter(amountToSend.data(), 1, MPI_INTEGER, amountToRecv.data() + i, 1,
+                MPI_INTEGER, i, MPI_COMM_WORLD);
     if (i != rank) {
       countToRecv += amountToRecv[i];
     }
@@ -380,7 +381,7 @@ void AbstractProcess::doExchangeStars(std::vector<lld> *ids,
   };
   auto recv = [&](int otherRank) {
     if (amountToRecv[otherRank]) {
-      lld count = amountToRecv[otherRank];
+      int count = amountToRecv[otherRank];
       recvStarsFrom(otherRank, count, idsPtr, coordsPtr, speedsPtr, accsPtr);
       idsPtr += count;
       coordsPtr += count * 2;
@@ -421,7 +422,7 @@ void AbstractProcess::sendStarsTo(int otherRank, const std::vector<lld> &ids,
                                   const std::vector<float> &coords,
                                   const std::vector<float> &speeds,
                                   const std::vector<float> &accs) const {
-  lld count = ids.size();
+  int count = ids.size();
   MPI_Send(ids.data(), count, MPI_LLD, otherRank, 1001, MPI_COMM_WORLD);
   MPI_Send(coords.data(), count * 2, MPI_FLOAT, otherRank, 1002,
            MPI_COMM_WORLD);
@@ -430,7 +431,7 @@ void AbstractProcess::sendStarsTo(int otherRank, const std::vector<lld> &ids,
   MPI_Send(accs.data(), count * 2, MPI_FLOAT, otherRank, 1004, MPI_COMM_WORLD);
 }
 
-void AbstractProcess::recvStarsFrom(int otherRank, lld count, lld *ids,
+void AbstractProcess::recvStarsFrom(int otherRank, int count, lld *ids,
                                     float *coords, float *speeds,
                                     float *accs) const {
   MPI_Recv(ids, count, MPI_LLD, otherRank, 1001, MPI_COMM_WORLD,
@@ -445,9 +446,6 @@ void AbstractProcess::recvStarsFrom(int otherRank, lld count, lld *ids,
 
 void AbstractProcess::printStars(std::string gal1, std::string gal2) const {
   if (rank == 0) {
-    auto stars = receiveAllStarsForPrint();
-    std::sort(stars.begin(), stars.end());
-
     FILE *out1 = fopen(gal1.c_str(), "w");
     if (!out1) {
       throw std::runtime_error("Unable to open file " + gal1 + " for writing");
@@ -457,6 +455,8 @@ void AbstractProcess::printStars(std::string gal1, std::string gal2) const {
       throw std::runtime_error("Unable to open file " + gal2 + " for writing");
     }
 
+    auto stars = receiveAllStarsForPrint();
+    std::sort(stars.begin(), stars.end());
     for (const auto &star : stars) {
       FILE *out = star.id < 0 ? out2 : out1;
       fprintf(out, "%0.1f %0.1f\n", star.x, star.y);
@@ -470,11 +470,12 @@ void AbstractProcess::printStars(std::string gal1, std::string gal2) const {
 }
 
 std::vector<Star> AbstractProcess::receiveAllStarsForPrint() const {
-  lld count = ids.size();
-  lld starsCount[numProcesses];
+  int count = ids.size();
+  int starsCount[numProcesses];
   std::vector<MPI_Request> requests;
 
-  MPI_Gather(&count, 1, MPI_LLD, starsCount, 1, MPI_LLD, 0, MPI_COMM_WORLD);
+  MPI_Gather(&count, 1, MPI_INTEGER, starsCount, 1, MPI_INTEGER, 0,
+             MPI_COMM_WORLD);
   lld countSum = 0;
   for (int i = 1; i < numProcesses; i++) {
     countSum += starsCount[i];
@@ -492,12 +493,12 @@ std::vector<Star> AbstractProcess::receiveAllStarsForPrint() const {
   lld *idsPtr = tmpIds.data();
   float *coordsPtr = tmpCoords.data();
   for (int proc = 1; proc < numProcesses; proc++) {
-    lld count = starsCount[proc];
+    int count = starsCount[proc];
     if (count) {
       MPI_Irecv(idsPtr, count, MPI_LLD, proc, 100, MPI_COMM_WORLD,
-               &(requests[lastRequest++]));
+                &(requests[lastRequest++]));
       MPI_Irecv(coordsPtr, count * 2, MPI_FLOAT, proc, 101, MPI_COMM_WORLD,
-               &(requests[lastRequest++]));
+                &(requests[lastRequest++]));
       idsPtr += count;
       coordsPtr += count * 2;
     }
@@ -525,9 +526,9 @@ std::vector<Star> AbstractProcess::receiveAllStarsForPrint() const {
 }
 
 void AbstractProcess::sendAllStarsForPrint() const {
-  lld count = ids.size();
-
-  MPI_Gather(&count, 1, MPI_LLD, NULL, 0, MPI_LONG_LONG_INT, 0, MPI_COMM_WORLD);
+  int count = ids.size();
+  MPI_Gather(&count, 1, MPI_INTEGER, nullptr, 0, MPI_INTEGER, 0,
+             MPI_COMM_WORLD);
   if (count) {
     MPI_Send(ids.data(), count, MPI_LLD, 0, 100, MPI_COMM_WORLD);
     MPI_Send(coords.data(), count * 2, MPI_FLOAT, 0, 101, MPI_COMM_WORLD);

@@ -9,8 +9,8 @@ class Process2 : public AbstractProcess {
                              std::vector<float> *otherMasses) override;
   std::vector<int> exchangeOrder() const;
 
-  lld exchangeCount(int otherRank);
-  void exchangeOtherStars(int otherRank, lld toRecv, float *coords,
+  int exchangeCount(int otherRank);
+  void exchangeOtherStars(int otherRank, int toRecv, float *coords,
                           float *masses);
 };
 

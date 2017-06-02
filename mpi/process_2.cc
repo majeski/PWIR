@@ -2,7 +2,7 @@
 
 void Process2::getOtherStars(std::vector<float> *otherCoords,
                              std::vector<float> *otherMasses) {
-  std::vector<lld> toRecv;
+  std::vector<int> toRecv;
   lld countSum = 0;
   auto order = exchangeOrder();
   for (int otherRank : order) {
@@ -90,15 +90,15 @@ std::vector<int> Process2::exchangeOrder() const {
   return partners;
 }
 
-lld Process2::exchangeCount(int otherRank) {
-  lld toSend = ids.size();
-  lld toRecv;
+int Process2::exchangeCount(int otherRank) {
+  int toSend = ids.size();
+  int toRecv;
 
   auto send = [&]() {
-    MPI_Send(&toSend, 1, MPI_LLD, otherRank, 601, MPI_COMM_WORLD);
+    MPI_Send(&toSend, 1, MPI_INTEGER, otherRank, 601, MPI_COMM_WORLD);
   };
   auto recv = [&]() {
-    MPI_Recv(&toRecv, 1, MPI_LLD, otherRank, 601, MPI_COMM_WORLD,
+    MPI_Recv(&toRecv, 1, MPI_INTEGER, otherRank, 601, MPI_COMM_WORLD,
              MPI_STATUS_IGNORE);
   };
 
@@ -112,9 +112,9 @@ lld Process2::exchangeCount(int otherRank) {
   return toRecv;
 }
 
-void Process2::exchangeOtherStars(int otherRank, lld toRecv, float *otherCoords,
+void Process2::exchangeOtherStars(int otherRank, int toRecv, float *otherCoords,
                                   float *otherMasses) {
-  lld toSend = ids.size();
+  int toSend = ids.size();
 
   auto send = [&]() {
     if (toSend > 0) {

@@ -2,14 +2,13 @@
 
 void Process1::getOtherStars(std::vector<float> *otherCoords,
                              std::vector<float> *otherMasses) {
-  std::vector<lld> count;
+  std::vector<int> count;
   count.resize(numProcesses);
 
   count[rank] = ids.size();
-
   lld starsCount = -count[rank];
   for (int i = 0; i < numProcesses; i++) {
-    MPI_Bcast(count.data() + i, 1, MPI_LLD, i, MPI_COMM_WORLD);
+    MPI_Bcast(count.data() + i, 1, MPI_INTEGER, i, MPI_COMM_WORLD);
     starsCount += count[i];
   }
 
