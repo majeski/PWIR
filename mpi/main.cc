@@ -10,6 +10,7 @@
 
 #include "process_1.h"
 #include "process_2.h"
+#include "process_3.h"
 
 std::unordered_map<std::string, std::string> parseArgs(int argc, char **argv) {
   std::unordered_map<std::string, std::string> args;
@@ -64,10 +65,36 @@ bool readParams(std::unordered_map<std::string, std::string> args,
     *delta = std::stof(args["delta"]);
     *total = std::stof(args["total"]);
   } catch (const std::exception &e) {
-    std::cerr << "argument format error: " << e.what() << "\n";
+    std::cerr << "Argument format error: " << e.what() << "\n";
     return false;
   }
 
+  return true;
+}
+
+bool checkParams(int hor, int ver, float delta, float total, int rank,
+                 int numProcesses) {
+  const double eps = 10e-9;
+  auto err = [&](const std::string &msg) {
+    if (rank == 0) {
+      std::cerr << msg << std::endl;
+    }
+  };
+
+  if (hor < 0 || ver < 0 || numProcesses < 0 ||
+      (lld)hor * ver != numProcesses) {
+    err("incorrect number of processes");
+    return false;
+  }
+
+  if (delta < 0.1 - eps || delta > 1.0 + eps) {
+    err("incorrect time step");
+    return false;
+  }
+  if (total < 1.0 - eps || total > 100.0 + eps) {
+    err("incorrect total duration");
+    return false;
+  }
   return true;
 }
 
@@ -78,7 +105,7 @@ int main(int argc, char *argv[]) {
 #elif V2
   p.reset(new Process2());
 #elif V3
-// TODO
+  p.reset(new Process3());
 #else
   assert(false && "No version choosen");
 #endif
@@ -94,18 +121,16 @@ int main(int argc, char *argv[]) {
   if (!readParams(args, p, &verbose, &gal1Filename, &gal2Filename, &delta,
                   &total)) {
     MPI_Finalize();
-    return EXIT_FAILURE;
+    return 0;
   }
 
-  if ((lld)p->hor * p->ver != p->numProcesses) {
-    std::cerr << "incorrect number of processes\n";
+  if (!checkParams(p->hor, p->ver, delta, total, p->rank, p->numProcesses)) {
     MPI_Finalize();
-    return EXIT_FAILURE;
+    return 0;
   }
-
-  std::vector<Star> stars;
 
   try {
+    std::vector<Star> stars;
     if (p->rank == 0) {
       p->readGal(std::move(gal1Filename), 1, &stars);
       p->readGal(std::move(gal2Filename), 2, &stars);
@@ -122,7 +147,7 @@ int main(int argc, char *argv[]) {
       p->recvInitialStars();
     }
 
-    for (int i = 0; i < total / delta; i++) {
+    for (int i = 0; i < round(total / delta); i++) {
       if (p->rank == 0) {
         printf("step %d\n", i);
       }
@@ -137,7 +162,7 @@ int main(int argc, char *argv[]) {
   } catch (std::exception &e) {
     std::cerr << e.what() << "\n";
     MPI_Abort(MPI_COMM_WORLD, MPI_ERR_IO);
-    return EXIT_FAILURE;
+    return 0;
   }
 
   MPI_Finalize();

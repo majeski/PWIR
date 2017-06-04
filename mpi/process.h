@@ -2,11 +2,13 @@
 #define PROCESS__H
 
 #include <float.h>
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
+#include <tuple>
 #include <vector>
 
 #include <mpi.h>
@@ -63,7 +65,7 @@ class AbstractProcess {
 
   void step(float delta);
 
-  void printStars(std::string gal1, std::string gal2) const;
+  void printStars(std::string gal1, std::string gal2);
 
  protected:
   std::vector<lld> ids;
@@ -77,7 +79,14 @@ class AbstractProcess {
   SpaceInfo space;
 
   virtual void getOtherStars(std::vector<float> *coords,
-                             std::vector<float> *masses) = 0;
+                             std::vector<float> *masses);
+  virtual std::vector<int> otherStarsExchangeOrder() const = 0;
+
+  std::vector<int> allToAllOrder() const;
+  int exchangeCount(int otherRank, int toSend) const;
+  void exchangeOtherStars(int otherRank, std::vector<float> &coords,
+                          std::vector<float> &masses, int toRecv,
+                          float *otherCoords, float *otherMasses) const;
 
  private:
   bool firstStep;
@@ -88,8 +97,8 @@ class AbstractProcess {
   void sendGalaxiesInfo() const;
   void recvGalaxiesInfo();
 
-  std::vector<Star> receiveAllStarsForPrint() const;
-  void sendAllStarsForPrint() const;
+  std::vector<Star> receiveAllStarsForPrint();
+  void sendAllStarsForPrint();
 
   void setInitialSpeed();
   void updateMasses();
@@ -106,13 +115,13 @@ class AbstractProcess {
   void exchangeStars();
   void doExchangeStars(std::vector<lld> *ids, std::vector<float> *coords,
                        std::vector<float> *speeds, std::vector<float> *accs);
-  std::vector<int> exchangeStarsOrder() const;
-  void sendStarsTo(int otherRank, const std::vector<lld> &ids,
-                   const std::vector<float> &coords,
-                   const std::vector<float> &speeds,
-                   const std::vector<float> &accs) const;
+  void sendStarsTo(int otherRank, std::vector<lld> &ids,
+                   std::vector<float> &coords, std::vector<float> &speeds,
+                   std::vector<float> &accs,
+                   std::vector<MPI_Request> *requests);
   void recvStarsFrom(int otherRank, int count, lld *ids, float *coords,
-                     float *speeds, float *accs) const;
+                     float *speeds, float *accs,
+                     std::vector<MPI_Request> *requests) const;
 };
 
 #endif

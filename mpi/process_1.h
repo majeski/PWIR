@@ -5,8 +5,7 @@
 
 class Process1 : public AbstractProcess {
  protected:
-  virtual void getOtherStars(std::vector<float> *otherCoords,
-                             std::vector<float> *otherMasses) override;
+  virtual std::vector<int> otherStarsExchangeOrder() const override;
 };
 
 #endif
