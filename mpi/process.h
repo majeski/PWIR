@@ -1,12 +1,14 @@
 #ifndef PROCESS__H
 #define PROCESS__H
 
-#include <float.h>
 #include <algorithm>
+#include <cassert>
+#include <cmath>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <float.h>
 #include <iostream>
 #include <tuple>
 #include <vector>
@@ -107,7 +109,7 @@ class AbstractProcess {
 
   std::vector<lld> updateAccs(const std::vector<float> &otherCoords,
                               const std::vector<float> &otherMasses);
-  void updateCoords(float delta, const std::vector<lld> &toSkip);
+  void updateCoords(double delta, const std::vector<lld> &toSkip);
   void updateSpeeds(const std::vector<float> &oldAccs, float delta,
                     const std::vector<lld> &toSkip);
   void fixCoords();

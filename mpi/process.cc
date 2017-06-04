@@ -168,8 +168,10 @@ void AbstractProcess::distributeInitialStars(
 }
 
 int AbstractProcess::starCell(float x, float y) const {
-  int cellX = std::min(int((x - space.x) / space.cellWidth), ver - 1);
-  int cellY = std::min(int((y - space.y) / space.cellHeight), hor - 1);
+  int cellX =
+      std::max(0, std::min(int((x - space.x) / space.cellWidth), ver - 1));
+  int cellY =
+      std::max(0, std::min(int((y - space.y) / space.cellHeight), hor - 1));
   return cellY * ver + cellX;
 }
 
@@ -207,12 +209,13 @@ void AbstractProcess::updateMasses() {
   }
 }
 
-inline std::pair<float, float> calcF(float star1X, float star1Y, float mass1,
-                                     float star2X, float star2Y, float mass2) {
-  static const float G = 155893.597;
-  const float dX = star1X - star2X;
-  const float dY = star1Y - star2Y;
-  const float norm = sqrt(dX * dX + dY * dY);
+inline std::pair<double, double> calcF(float star1X, float star1Y, float mass1,
+                                       float star2X, float star2Y,
+                                       float mass2) {
+  static const double G = 155893.597;
+  const double dX = star1X - star2X;
+  const double dY = star1Y - star2Y;
+  const double norm = sqrt(dX * dX + dY * dY);
   return {(G * mass1 * mass2 * (star1X - star2X)) / (norm * norm * norm),
           (G * mass1 * mass2 * (star1Y - star2Y)) / (norm * norm * norm)};
 }
@@ -242,9 +245,9 @@ void AbstractProcess::step(float delta) {
 std::vector<lld> AbstractProcess::updateAccs(
     const std::vector<float> &otherCoords,
     const std::vector<float> &otherMasses) {
-  lld otherCount = otherCoords.size() / 2;
+  lld otherCount = otherMasses.size();
+  std::vector<double> accs(coords.size());
   std::vector<lld> toSkip;
-  accs.resize(coords.size());
 
   for (lld i = 0; i < (lld)ids.size(); i++) {
     const lld xIdx = i * 2;
@@ -256,10 +259,10 @@ std::vector<lld> AbstractProcess::updateAccs(
       float x = coords[xIdx];
       float y = coords[yIdx];
       float mass = masses[i];
-      float dX, dY;
+      double dX, dY;
       std::tie(dX, dY) = calcF(x, y, mass, otherX, otherY, otherMass);
-      accs[xIdx] += dX;
-      accs[yIdx] += dY;
+      accs[xIdx] -= dX;
+      accs[yIdx] -= dY;
     };
 
     for (lld j = 0; j < (lld)ids.size(); j++) {
@@ -273,13 +276,18 @@ std::vector<lld> AbstractProcess::updateAccs(
       nextStar(otherCoords[j * 2], otherCoords[j * 2 + 1], otherMasses[j]);
     }
 
-    if (-accs[xIdx] > FLT_MAX / 2 || -accs[yIdx] > FLT_MAX / 2) {
+    if (accs[xIdx] > FLT_MAX / 2 || accs[yIdx] > FLT_MAX / 2 ||
+        !isfinite(accs[xIdx]) || !isfinite(accs[yIdx])) {
       toSkip.push_back(xIdx / 2);
     }
-    accs[xIdx] /= -masses[i];
-    accs[yIdx] /= -masses[i];
+    accs[xIdx] /= masses[i];
+    accs[yIdx] /= masses[i];
   }
 
+  this->accs.resize(accs.size());
+  for (lld i = 0; i < (lld)accs.size(); i++) {
+    this->accs[i] = accs[i];
+  }
   return toSkip;
 }
 
@@ -297,7 +305,7 @@ void AbstractProcess::updateSpeeds(const std::vector<float> &oldAccs,
   }
 }
 
-void AbstractProcess::updateCoords(float delta,
+void AbstractProcess::updateCoords(double delta,
                                    const std::vector<lld> &toSkip) {
   auto curToSkip = toSkip.begin();
   for (lld i = 0; i < (lld)coords.size(); i++) {
@@ -316,25 +324,25 @@ void AbstractProcess::fixCoords() {
   for (lld i = 0; i < (lld)coords.size(); i += 2) {
     float &x = coords[i];
     float &y = coords[i + 1];
-    const float spaceWidth = space.cellWidth * ver;
-    const float spaceHeight = space.cellHeight * hor;
+    const double spaceWidth = (double)space.cellWidth * ver;
+    const double spaceHeight = (double)space.cellHeight * hor;
 
     if (x < space.x) {
-      float distX = space.x - x;
+      double distX = space.x - x;
       distX -= floor(distX / spaceWidth) * spaceWidth;
       x = space.x + spaceWidth - distX;
     } else if (x > space.x + spaceWidth) {
-      float distX = x - (space.x + spaceWidth);
+      double distX = x - (space.x + spaceWidth);
       distX -= floor(distX / spaceWidth) * spaceWidth;
       x = space.x + distX;
     }
 
     if (y < space.y) {
-      float distY = space.y - y;
+      double distY = space.y - y;
       distY -= floor(distY / spaceHeight) * spaceHeight;
       y = space.y + spaceHeight - distY;
-    } else if (x > space.x + spaceWidth) {
-      float distY = y - (space.y + spaceHeight);
+    } else if (y > space.y + spaceHeight) {
+      double distY = y - (space.y + spaceHeight);
       distY -= floor(distY / spaceHeight) * spaceHeight;
       y = space.y + distY;
     }
@@ -348,9 +356,10 @@ void AbstractProcess::exchangeStars() {
   std::vector<float> accs[numProcesses];
 
   for (lld i = 0; i < (lld)this->ids.size(); i++) {
-    const float xIdx = i * 2;
-    const float yIdx = i * 2 + 1;
+    const lld xIdx = i * 2;
+    const lld yIdx = i * 2 + 1;
     const int cell = starCell(this->coords[xIdx], this->coords[yIdx]);
+
     ids[cell].push_back(this->ids[i]);
     coords[cell].push_back(this->coords[xIdx]);
     coords[cell].push_back(this->coords[yIdx]);
@@ -479,7 +488,11 @@ void AbstractProcess::printStars(std::string gal1, std::string gal2) {
     std::sort(stars.begin(), stars.end());
     for (const auto &star : stars) {
       FILE *out = star.id < 0 ? out2 : out1;
-      fprintf(out, "%0.1f %0.1f\n", star.x, star.y);
+      if (fprintf(out, "%0.1f %0.1f\n", star.x, star.y) < 0) {
+        fclose(out1);
+        fclose(out2);
+        throw std::runtime_error("Error writing to file");
+      }
     }
 
     fclose(out1);
