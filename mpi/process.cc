@@ -215,7 +215,7 @@ inline std::pair<double, double> calcF(float star1X, float star1Y, float mass1,
   static const double G = 155893.597;
   const double dX = star1X - star2X;
   const double dY = star1Y - star2Y;
-  const double norm = sqrt(dX * dX + dY * dY);
+  const double norm = std::sqrt(dX * dX + dY * dY);
   return {(G * mass1 * mass2 * (star1X - star2X)) / (norm * norm * norm),
           (G * mass1 * mass2 * (star1Y - star2Y)) / (norm * norm * norm)};
 }
@@ -277,7 +277,7 @@ std::vector<lld> AbstractProcess::updateAccs(
     }
 
     if (accs[xIdx] > FLT_MAX / 2 || accs[yIdx] > FLT_MAX / 2 ||
-        !isfinite(accs[xIdx]) || !isfinite(accs[yIdx])) {
+        !std::isfinite(accs[xIdx]) || !std::isfinite(accs[yIdx])) {
       toSkip.push_back(xIdx / 2);
     }
     accs[xIdx] /= masses[i];
